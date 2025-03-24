@@ -1,0 +1,13 @@
+# Ignore environment files
+.venv/
+.env
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore Jupyter and VSCode files
+.ipynb_checkpoints/
+.vscode/
