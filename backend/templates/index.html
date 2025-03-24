@@ -5,24 +5,183 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat with LLM</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; text-align: center; }
-        input, button { margin: 10px; padding: 10px; width: 80%; }
-        .container { width: 50%; margin: auto; }
-        textarea { width: 80%; height: 100px; margin-top: 10px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: #0d0d0d;
+            color: #ffffff; 
+            margin: 0; 
+            padding: 0;
+            display: flex;
+            height: 100vh; 
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #222;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .new-chat-btn {
+            background: #6200ea;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .new-chat-btn:hover {
+            background: #3700b3;
+        }
+
+        .chat-container {
+            flex: 1;
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-history {
+            height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 1px solid #333;
+            scroll-behavior: smooth;
+        }
+
+        .user-message, .bot-message {
+            padding: 12px 15px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background-color: #6200ea;
+        }
+
+        .bot-message {
+            align-self: flex-start;
+            background-color: #333;
+        }
+
+        .input-container {
+            display: flex;
+            margin-top: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            outline: none;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin-left: 10px;
+            border-radius: 8px;
+            border: none;
+            background-color: #6200ea;
+            color: white;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: #3700b3;
+        }
+
+        button:disabled {
+            background-color: #444;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Chat with LLM</h2>
-        <form method="post">
-            <input type="text" name="user_query" placeholder="Enter your query" required value="{{ user_query or '' }}">
-            <button type="submit">Submit</button>
-        </form>
 
-        {% if response %}
-            <h3>Response:</h3>
-            <textarea readonly>{{ response }}</textarea>
-        {% endif %}
+    <div class="sidebar">
+        <button class="new-chat-btn" onclick="startNewChat()">+ New Chat</button>
+        <div id="chatList"></div>
     </div>
+
+    <div class="chat-container">
+        <h2 style="text-align: center;">Chat with LLM</h2>
+
+        <div class="chat-history" id="chatHistory"></div>
+
+        <form class="input-container" id="queryForm">
+            <input type="text" id="userQuery" placeholder="Type your message..." required>
+            <button type="submit" id="sendBtn">Send</button>
+        </form>
+    </div>
+
+    <script>
+        let chatHistory = document.getElementById("chatHistory");
+        let form = document.getElementById("queryForm");
+        let input = document.getElementById("userQuery");
+        let sendBtn = document.getElementById("sendBtn");
+        let chatList = document.getElementById("chatList");
+        let currentChatId = generateUUID();
+
+        function generateUUID() {
+            return "chat-" + Math.random().toString(36).substr(2, 9);
+        }
+
+        function appendMessage(content, type) {
+            let div = document.createElement("div");
+            div.className = type === "user" ? "user-message" : "bot-message";
+            div.innerHTML = content.replace(/\n/g, "<br>");
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        form.addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            let userMessage = input.value.trim();
+            if (userMessage === "") return;
+
+            appendMessage(userMessage, "user");
+            input.value = "";
+            sendBtn.innerText = "Fetching...";
+            sendBtn.disabled = true;
+
+            try {
+                let response = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({ user_query: userMessage, chat_id: currentChatId })
+                });
+
+                let data = await response.json();
+                appendMessage(data.bot || "⚠ No valid response from AI.", "bot");
+            } catch (error) {
+                appendMessage("❌ Error contacting the server.", "bot");
+            }
+
+            sendBtn.innerText = "Send";
+            sendBtn.disabled = false;
+        });
+
+        function startNewChat() {
+            currentChatId = generateUUID();
+            chatHistory.innerHTML = "";
+        }
+    </script>
+
 </body>
 </html>

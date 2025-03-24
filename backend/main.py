@@ -3,55 +3,66 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse
 import google.generativeai as genai
+import re
+import uuid
 
-# Load API Key from .env file
+# Load API Key
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-# Configure Google Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+API_KEY = os.getenv("GEMINI_API_KEY")
+if not API_KEY:
+    print("❌ Error: GEMINI_API_KEY is missing! Please set it in your .env file.")
 
-# Fetch available models
+genai.configure(api_key=API_KEY)
+
 try:
     models = genai.list_models()
     available_models = [model.name for model in models if "gemini" in model.name]
-    print("✅ Available Gemini Models:", available_models)
     
-    # Choose the best available model
-    PREFERRED_MODEL = "models/gemini-1.5-flash-002"
-    if PREFERRED_MODEL in available_models:
-        model_name = PREFERRED_MODEL
-    elif available_models:
-        model_name = available_models[0]  # Fallback to first available
-    else:
-        model_name = None
+
+    PREFERRED_MODEL = "models/gemini-2.0-flash-thinking-exp-01-21"
+    model_name = PREFERRED_MODEL if PREFERRED_MODEL in available_models else available_models[0] if available_models else None
 
 except Exception as e:
     print(f"❌ Error fetching models: {e}")
     model_name = None
 
-# Initialize FastAPI app
 app = FastAPI()
-
-# Set up Jinja2 templates
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# Dictionary to store chat history with unique chat IDs
+chats = {}
+
 @app.get("/")
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request, "chats": chats})
 
-@app.post("/")
-async def chat(request: Request, user_query: str = Form(...)):
+@app.post("/chat")
+async def chat(user_query: str = Form(...), chat_id: str = Form(...)):
+    global chats
+
     if not model_name:
-        return {"response": "❌ Error: No valid Gemini model available."}
+        return JSONResponse({"error": "❌ No valid Gemini model available."}, status_code=500)
 
     try:
         model = genai.GenerativeModel(model_name)
         response = model.generate_content(user_query)
-        bot_response = response.text if hasattr(response, "text") else "No response from Gemini."
-    except Exception as e:
-        bot_response = f"❌ Error: {str(e)}"
+        bot_response = response.text if hasattr(response, "text") else "⚠ No valid response from AI."
 
-    return {"response": bot_response}
+        # ✅ Ensure only headings and subheadings are bold
+        bot_response = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", bot_response)  # Bold only for headings
+        bot_response = re.sub(r"\* (.*?)", r"• \1", bot_response)  # Bullet points
+
+        if chat_id not in chats:
+            chats[chat_id] = {"title": user_query[:30], "messages": []}
+
+        chats[chat_id]["messages"].append({"user": user_query, "bot": bot_response})
+
+        return JSONResponse({"chat_id": chat_id, "user": user_query, "bot": bot_response})
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
