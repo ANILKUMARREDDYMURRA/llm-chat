@@ -11,3 +11,4 @@ __pycache__/
 # Ignore Jupyter and VSCode files
 .ipynb_checkpoints/
 .vscode/
+backend/chat_history.json
